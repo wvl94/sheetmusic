@@ -30,7 +30,8 @@ export default function App() {
   const [activePart, setActivePart] = useState(0)
   const [selection, setSelection] = useState(null) // { partIndex, index }
   const [ghost, setGhost] = useState(null)
-  const [zoom, setZoom] = useState(1)
+  const [zoom, setZoom] = useState(1.4)
+  const [fitting, setFitting] = useState(true)
   const [playhead, setPlayhead] = useState(null)
   const [instrument, setInstrument] = useState('piano')
   const [showSettings, setShowSettings] = useState(false)
@@ -39,6 +40,7 @@ export default function App() {
   const history = useRef({ past: [], future: [] })
   const dragging = useRef(null)
   const pageRefs = useRef([])
+  const paperRef = useRef(null)
   const fileInput = useRef(null)
 
   const measuresPerSystem = score.time.beats >= 5 ? 3 : 4
@@ -47,6 +49,29 @@ export default function App() {
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(score)) } catch (err) { /* private mode */ }
   }, [score])
+
+  const PX_PER_MM = 96 / 25.4
+
+  const fitWidth = useCallback(() => {
+    const el = paperRef.current
+    if (!el) return
+    const usable = el.clientWidth - 56
+    const next = Math.max(0.5, Math.min(3, usable / (PAGE.w * PX_PER_MM)))
+    setZoom(+next.toFixed(2))
+  }, [PX_PER_MM])
+
+  useEffect(() => {
+    if (!fitting) return undefined
+    fitWidth()
+    const observer = new ResizeObserver(fitWidth)
+    if (paperRef.current) observer.observe(paperRef.current)
+    return () => observer.disconnect()
+  }, [fitting, fitWidth])
+
+  const nudgeZoom = useCallback((delta) => {
+    setFitting(false)
+    setZoom((z) => Math.max(0.5, Math.min(3, +(z + delta).toFixed(2))))
+  }, [])
 
   const commit = useCallback((mutate) => {
     setScore((prev) => {
@@ -202,6 +227,18 @@ export default function App() {
   }
 
   useEffect(() => {
+    const el = paperRef.current
+    if (!el) return undefined
+    const onWheel = (e) => {
+      if (!e.ctrlKey && !e.metaKey) return
+      e.preventDefault()
+      nudgeZoom(e.deltaY > 0 ? -0.1 : 0.1)
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [nudgeZoom])
+
+  useEffect(() => {
     const up = () => { dragging.current = null }
     window.addEventListener('pointerup', up)
     return () => window.removeEventListener('pointerup', up)
@@ -310,6 +347,12 @@ export default function App() {
           setTool((t) => ({ ...t, dots: !t.dots }))
           if (selection) changeSelected((n) => { n.dots = n.dots ? 0 : 1 })
           break
+        case '+':
+        case '=':
+          e.preventDefault(); nudgeZoom(0.1); break
+        case '-':
+        case '_':
+          e.preventDefault(); nudgeZoom(-0.1); break
         case ' ':
           e.preventDefault(); togglePlay(); break
         default:
@@ -318,7 +361,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [changeSelected, deleteSelection, nudgePitch, redo, score.parts, selection, togglePlay, undo])
+  }, [changeSelected, deleteSelection, nudgePitch, nudgeZoom, redo, score.parts, selection, togglePlay, undo])
 
   // ---------- note entry from the instruments ----------
 
@@ -443,9 +486,10 @@ export default function App() {
         <div className="tool-group right">
           <span className="tool-label">Zoom</span>
           <div className="segmented">
-            <button className="seg" onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.1).toFixed(2)))}>−</button>
-            <button className="seg wide" onClick={() => setZoom(1)}>{Math.round(zoom * 100)}%</button>
-            <button className="seg" onClick={() => setZoom((z) => Math.min(1.8, +(z + 0.1).toFixed(2)))}>+</button>
+            <button className="seg" title="Zoom out (⌘ −)" onClick={() => nudgeZoom(-0.1)}>−</button>
+            <button className="seg wide" title="Zoom to 100%" onClick={() => { setFitting(false); setZoom(1) }}>{Math.round(zoom * 100)}%</button>
+            <button className="seg" title="Zoom in (⌘ +)" onClick={() => nudgeZoom(0.1)}>+</button>
+            <button className={`seg wide ${fitting ? 'on' : ''}`} title="Fit the page to the window" onClick={() => setFitting((v) => !v)}>Fit</button>
           </div>
         </div>
       </div>
@@ -514,7 +558,7 @@ export default function App() {
           </div>
         </aside>
 
-        <section className="paper">
+        <section className="paper" ref={paperRef}>
           <Sheet
             score={score}
             layout={layout}
