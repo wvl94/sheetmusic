@@ -2,7 +2,8 @@
 
 Write a simple song on an A4 page, hear it, print it, save it.
 
-- **Click to place.** Pick a note length, click the staff. Drag a note up or down to change the pitch.
+- **Click to place.** Pick a note length, click the staff. Drag a note up or down to change the pitch — as far above or below the staff as you like, ledger lines are drawn for you.
+- **Dot = longer.** Select a note and hit Dot: a dot after the note makes it half again as long (a dotted quarter lasts three eighths).
 - **Treble (sol) and bass (fa) clefs**, one staff per band member.
 - **Piano and cello panels** to find the right note by ear. In **Write** mode a click plays the note and writes it down; in **Just play** mode it only sounds, so you can try things out without touching the score.
 - **Print / PDF** gives a clean A4 page, 1:1, engraved with the Bravura music font.

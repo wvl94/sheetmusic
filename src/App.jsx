@@ -144,30 +144,42 @@ export default function App() {
 
   // ---------- pointer interaction on the page ----------
 
-  const locate = (page, svg, event) => {
+  // Which staff does a point belong to? A staff owns the space between its own
+  // lines; outside that the part you are working on keeps the pointer, so high
+  // and low ledger notes stay reachable.
+  const locate = (page, svg, event, lockPart) => {
     const rect = svg.getBoundingClientRect()
     const x = ((event.clientX - rect.left) / rect.width) * PAGE.w
     const y = ((event.clientY - rect.top) / rect.height) * PAGE.h
-    let best = null
+    const candidates = []
     page.systems.forEach((sys) => {
       sys.staves.forEach((stave) => {
-        const centre = stave.y + STAFF_H / 2
-        const distance = Math.abs(y - centre)
-        if (!best || distance < best.distance) best = { distance, stave, sys }
+        candidates.push({ sys, stave, distance: Math.abs(y - (stave.y + STAFF_H / 2)) })
       })
     })
-    if (!best) return null
-    const { stave, sys } = best
+    if (!candidates.length) return null
+    candidates.sort((a, b) => a.distance - b.distance)
+
+    let chosen
+    if (lockPart != null) {
+      chosen = candidates.find((c) => c.stave.partIndex === lockPart)
+    }
+    if (!chosen) {
+      const inside = candidates.find((c) => y >= c.stave.y - SPACE * 2 && y <= c.stave.y + STAFF_H + SPACE * 2)
+      const active = candidates.find((c) => c.stave.partIndex === activePart && c.distance < 24)
+      chosen = inside || active || candidates[0]
+    }
+
+    const { stave, sys } = chosen
     const clef = stave.clef
-    const raw = yToDn(y, stave.y, clef)
     const top = CLEFS[clef].topDn
-    const dn = Math.max(top - 18, Math.min(top + 8, raw))
+    const dn = Math.max(top - 22, Math.min(top + 14, yToDn(y, stave.y, clef)))
     return { x, y, dn, stave, sys, clef, page }
   }
 
   const handlePointer = (kind, event, page, svg) => {
     if (!svg) return
-    const spot = locate(page, svg, event)
+    const spot = locate(page, svg, event, dragging.current ? dragging.current.partIndex : null)
     if (!spot) return
 
     if (kind === 'leave') { setGhost(null); return }
@@ -450,10 +462,10 @@ export default function App() {
         <div className="tool-group">
           <span className="tool-label">Extras</span>
           <div className="segmented">
-            <button className={`seg wide ${tool.dots ? 'on' : ''}`} title="Dotted (.)" onClick={() => {
+            <button className={`seg wide ${tool.dots ? 'on' : ''}`} title="Dotted note (.) — a dot after the note makes it half again as long" onClick={() => {
               setTool((t) => ({ ...t, dots: !t.dots }))
               if (selection) changeSelected((n) => { n.dots = n.dots ? 0 : 1 })
-            }}>Dot ·</button>
+            }}><span className="bravura">{'\uE1E7'}</span> Dot = longer</button>
             <button className={`seg wide ${showNames ? 'on' : ''}`} title="Write the letter name under every note" onClick={() => setShowNames((v) => !v)}>Names</button>
             <button className={`seg wide ${tool.rest ? 'on' : ''}`} title="Rest (R)" onClick={() => setTool((t) => ({ ...t, rest: !t.rest }))}>
               Rest <span className="bravura">{''}</span>
@@ -559,6 +571,7 @@ export default function App() {
               <li>Pick a note length above.</li>
               <li>Click on the staff to place it.</li>
               <li>Drag a note up or down to change the pitch.</li>
+              <li>Select a note and hit <strong>Dot</strong> to make it half again as long.</li>
               <li>Not sure? Press a piano key below.</li>
             </ol>
           </div>

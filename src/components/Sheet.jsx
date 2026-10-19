@@ -222,7 +222,6 @@ export default function Sheet({ score, layout, zoom, selectedId, playingIds, gho
               {score.composer ? (
                 <text className="score-composer" x={PAGE.w - PAGE.marginX} y={page.titleY + 7} textAnchor="end">{score.composer}</text>
               ) : null}
-              <text className="score-tempo" x={PAGE.marginX} y={page.titleY + 7}>{`♩ = ${score.tempo}`}</text>
             </>
           ) : null}
 
