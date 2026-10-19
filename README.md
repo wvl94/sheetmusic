@@ -4,7 +4,7 @@ Write a simple song on an A4 page, hear it, print it, save it.
 
 - **Click to place.** Pick a note length, click the staff. Drag a note up or down to change the pitch.
 - **Treble (sol) and bass (fa) clefs**, one staff per band member.
-- **Piano and cello panels** to find the right note by ear — a click plays it and writes it down.
+- **Piano and cello panels** to find the right note by ear. In **Write** mode a click plays the note and writes it down; in **Just play** mode it only sounds, so you can try things out without touching the score.
 - **Print / PDF** gives a clean A4 page, 1:1, engraved with the Bravura music font.
 - **Save file / Open file** writes and reads plain `.xelavi.json`, so songs live on your own disk.
 - Work in progress is also kept in the browser's local storage.

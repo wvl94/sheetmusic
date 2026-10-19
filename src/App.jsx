@@ -34,6 +34,7 @@ export default function App() {
   const [fitting, setFitting] = useState(true)
   const [playhead, setPlayhead] = useState(null)
   const [instrument, setInstrument] = useState('piano')
+  const [instrumentMode, setInstrumentMode] = useState('write') // 'write' | 'play'
   const [showSettings, setShowSettings] = useState(false)
   const [showNames, setShowNames] = useState(false)
 
@@ -367,6 +368,11 @@ export default function App() {
 
   const pickFromInstrument = (dn, acc) => {
     const partIndex = activePart
+    if (instrumentMode === 'play') {
+      unlockAudio()
+      playTone(midiOf({ dn, acc: acc === 'auto' ? tool.acc : acc }, score.fifths), 0.7, activeSound)
+      return
+    }
     const notes = score.parts[partIndex].notes
     const index = selection && selection.partIndex === partIndex ? selection.index + 1 : notes.length
     addNote(partIndex, index, dn, acc === 'auto' ? tool.acc : acc)
@@ -580,8 +586,26 @@ export default function App() {
             <button className={`seg wide ${instrument === 'piano' ? 'on' : ''}`} onClick={() => setInstrument('piano')}>Piano</button>
             <button className={`seg wide ${instrument === 'cello' ? 'on' : ''}`} onClick={() => setInstrument('cello')}>Cello</button>
           </div>
+          <div className="segmented">
+            <button
+              className={`seg wide ${instrumentMode === 'write' ? 'on' : ''}`}
+              title="Clicking a key plays the note and writes it on the staff"
+              onClick={() => setInstrumentMode('write')}
+            >
+              ✎ Write
+            </button>
+            <button
+              className={`seg wide ${instrumentMode === 'play' ? 'on' : ''}`}
+              title="Clicking a key only plays the note — nothing is written down"
+              onClick={() => setInstrumentMode('play')}
+            >
+              ♪ Just play
+            </button>
+          </div>
           <p className="instrument-note">
-            Adding to <strong>{score.parts[activePart]?.name}</strong> — a click plays the note and writes it down.
+            {instrumentMode === 'write'
+              ? <>Adding to <strong>{score.parts[activePart]?.name}</strong> — a click plays the note and writes it down.</>
+              : <>Try things out freely — nothing is written down. Sounds like <strong>{SOUNDS[activeSound]?.label}</strong>.</>}
           </p>
         </div>
         <div className="instrument-body">
