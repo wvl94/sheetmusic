@@ -1,6 +1,6 @@
 // Small Web Audio synth: enough colour to hear whether a line works.
 
-import { freqOf, midiOf, beatsOf, measureCapacity } from '../music/model.js'
+import { freqOf, midiOf, measureCapacity, repeatPlan, splitIntoMeasures } from '../music/model.js'
 
 let ctx = null
 let master = null
@@ -80,30 +80,30 @@ export function isPlaying() {
   return !!playing
 }
 
-/** Schedules the whole score. onProgress gets the current beat, ~60x a second. */
+/** Schedules the whole score, following repeat marks. onProgress reports the
+ *  position in the played timeline, in quarter notes. */
 export function playScore(score, { onProgress, onEnd, fromBeat = 0 } = {}) {
   stopPlayback()
   const audio = ensure()
   const spb = 60 / Math.max(20, score.tempo) // seconds per quarter note
   const cap = measureCapacity(score.time)
+  const perPart = score.parts.map((part) => splitIntoMeasures(part.notes, cap))
+  const measureCount = Math.max(1, ...perPart.map((bars) => bars.length))
+  const plan = repeatPlan(score.repeats, measureCount)
   const start = audio.currentTime + 0.15
   let lastBeat = fromBeat
 
-  score.parts.forEach((part) => {
-    let beat = 0
-    let used = 0
-    part.notes.forEach((note) => {
-      const beats = beatsOf(note)
-      if (used > 1e-9 && used + beats > cap + 1e-9) {
-        beat += cap - used
-        used = 0
-      }
-      if (!note.rest && beat >= fromBeat - 1e-9) {
-        playTone(midiOf(note, score.fifths), beats * spb * 0.95, part.sound, start + (beat - fromBeat) * spb)
-      }
-      beat += beats
-      used = (used + beats) % cap
-      lastBeat = Math.max(lastBeat, beat)
+  plan.forEach((measureIndex, slot) => {
+    score.parts.forEach((part, partIndex) => {
+      const bar = perPart[partIndex][measureIndex]
+      if (!bar) return
+      bar.notes.forEach(({ note, startBeat, beats }) => {
+        const at = slot * cap + startBeat
+        if (at < fromBeat - 1e-9) return
+        lastBeat = Math.max(lastBeat, at + beats)
+        if (note.rest) return
+        playTone(midiOf(note, score.fifths), beats * spb * 0.95, part.sound, start + (at - fromBeat) * spb)
+      })
     })
   })
 

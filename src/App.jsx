@@ -5,7 +5,7 @@ import Cello from './components/Cello.jsx'
 import { PAGE, STAFF_H, SPACE, layoutScore, yToDn, insertIndexAt } from './music/layout.js'
 import {
   ACCIDENTALS, CLEFS, DURATIONS, KEYS, SOUNDS, TIME_SIGNATURES,
-  cloneScore, demoScore, makeNote, makePart, midiOf, nameOf, beatsOf,
+  cloneScore, demoScore, emptyRepeats, makeNote, makePart, midiOf, nameOf, repeatPlan,
 } from './music/model.js'
 import { playScore, playTone, stopPlayback, unlockAudio } from './audio/engine.js'
 
@@ -16,7 +16,7 @@ function loadInitial() {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw)
-      if (parsed && parsed.parts && parsed.parts.length) return parsed
+      if (parsed && parsed.parts && parsed.parts.length) return { ...parsed, repeats: parsed.repeats || emptyRepeats() }
     }
   } catch (err) {
     /* fall through to the demo */
@@ -276,11 +276,16 @@ export default function App() {
   const playingIds = useMemo(() => {
     const ids = new Set()
     if (playhead === null) return ids
+    const plan = repeatPlan(score.repeats, Math.max(1, layout.writtenMeasures))
+    const slot = Math.floor(playhead / layout.cap)
+    const measure = plan[slot]
+    if (measure === undefined) return ids
+    const beatInBar = playhead - slot * layout.cap
     layout.placements.forEach((p) => {
-      if (playhead >= p.globalBeat - 0.02 && playhead < p.globalBeat + p.beats) ids.add(p.id)
+      if (p.measureIndex === measure && beatInBar >= p.startBeat - 0.02 && beatInBar < p.startBeat + p.beats) ids.add(p.id)
     })
     return ids
-  }, [layout, playhead])
+  }, [layout, playhead, score.repeats])
 
   const selectedId = selection ? `${score.parts[selection.partIndex]?.id}:${selection.index}` : null
 
@@ -304,6 +309,7 @@ export default function App() {
       try {
         const parsed = JSON.parse(String(reader.result))
         if (!parsed.parts) throw new Error('not a song file')
+        parsed.repeats = parsed.repeats || emptyRepeats()
         commit((next) => { Object.keys(next).forEach((k) => delete next[k]); Object.assign(next, parsed) })
         setSelection(null)
         setActivePart(0)
@@ -389,6 +395,26 @@ export default function App() {
     const index = selection && selection.partIndex === partIndex ? selection.index + 1 : notes.length
     addNote(partIndex, index, dn, acc === 'auto' ? tool.acc : acc)
   }
+
+  const toggleBarline = useCallback((barline) => {
+    commit((next) => {
+      const repeats = next.repeats || (next.repeats = emptyRepeats())
+      const ends = new Set(repeats.ends)
+      const starts = new Set(repeats.starts)
+      if (ends.has(barline)) {
+        ends.delete(barline)
+        starts.add(barline)
+      } else if (starts.has(barline)) {
+        starts.delete(barline)
+      } else if (barline === 0) {
+        starts.add(barline)
+      } else {
+        ends.add(barline)
+      }
+      repeats.ends = [...ends].sort((a, b) => a - b)
+      repeats.starts = [...starts].sort((a, b) => a - b)
+    })
+  }, [commit])
 
   const setField = (patch) => commit((next) => Object.assign(next, patch))
   const setPart = (index, patch) => commit((next) => Object.assign(next.parts[index], patch))
@@ -572,6 +598,7 @@ export default function App() {
               <li>Click on the staff to place it.</li>
               <li>Drag a note up or down to change the pitch.</li>
               <li>Select a note and hit <strong>Dot</strong> to make it half again as long.</li>
+              <li>Click a barline to repeat a section.</li>
               <li>Not sure? Press a piano key below.</li>
             </ol>
           </div>
@@ -586,6 +613,7 @@ export default function App() {
             playingIds={playingIds}
             ghost={ghost}
             showNames={showNames}
+            onBarline={toggleBarline}
             pageRefs={pageRefs}
             onPointer={handlePointer}
             onNotePointerDown={handleNotePointerDown}

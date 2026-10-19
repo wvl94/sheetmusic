@@ -186,6 +186,8 @@ body {
 .ink-stroke { stroke: #111; fill: none; }
 .ink-fill { fill: #111; }
 .hit { fill: transparent; }
+.barline-hit { fill: transparent; cursor: pointer; }
+.barline-hit:hover { fill: var(--accent); opacity: .16; }
 .note { cursor: grab; }
 .note:hover .ink, .note:hover .ink-fill { fill: var(--accent); }
 .note:hover .ink-stroke { stroke: var(--accent); }

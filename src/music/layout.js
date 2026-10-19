@@ -1,7 +1,7 @@
 // Page layout engine. Everything is computed in millimetres so the SVG can be
 // printed 1:1 on A4 without any scaling maths at print time.
 
-import { CLEFS, beatsOf, measureCapacity, beamUnit } from './model.js'
+import { CLEFS, measureCapacity, beamUnit, splitIntoMeasures } from './model.js'
 
 export const PAGE = { w: 210, h: 297, marginX: 16, marginTop: 16, marginBottom: 16 }
 export const SPACE = 1.75 // one staff space
@@ -20,26 +20,6 @@ export const STEM_LEN = SPACE * 3.4
 
 export const dnToY = (dn, staffY, clef) => staffY + (CLEFS[clef].topDn - dn) * (SPACE / 2)
 export const yToDn = (y, staffY, clef) => CLEFS[clef].topDn - Math.round((y - staffY) / (SPACE / 2))
-
-function splitMeasures(notes, cap) {
-  const measures = [{ notes: [] }]
-  let used = 0
-  notes.forEach((note, index) => {
-    const beats = beatsOf(note)
-    if (used > 1e-9 && used + beats > cap + 1e-9) {
-      measures.push({ notes: [] })
-      used = 0
-    }
-    measures[measures.length - 1].notes.push({ note, index, startBeat: used, beats })
-    used += beats
-    if (used >= cap - 1e-9) {
-      measures.push({ notes: [] })
-      used = 0
-    }
-  })
-  if (measures.length > 1 && measures[measures.length - 1].notes.length === 0) measures.pop()
-  return measures
-}
 
 function beamGroups(placed, time) {
   const unit = beamUnit(time)
@@ -69,7 +49,7 @@ export function layoutScore(score, opts = {}) {
   const minMeasures = opts.minMeasures ?? measuresPerSystem * 2
   const cap = measureCapacity(score.time)
   const parts = score.parts
-  const perPart = parts.map((part) => splitMeasures(part.notes, cap))
+  const perPart = parts.map((part) => splitIntoMeasures(part.notes, cap))
   const filled = Math.max(1, ...perPart.map((m) => m.length))
   const measureCount = Math.ceil(Math.max(filled, minMeasures) / measuresPerSystem) * measuresPerSystem
   const systemCount = measureCount / measuresPerSystem
@@ -93,7 +73,7 @@ export function layoutScore(score, opts = {}) {
   }
 
   const totalBeats = measureCount * cap
-  return { pages, placements, measureCount, systemHeight, totalBeats, cap }
+  return { pages, placements, measureCount, writtenMeasures: filled, systemHeight, totalBeats, cap }
 }
 
 function buildSystem({ score, perPart, sys, cap, keyW, measuresPerSystem, pageIndex, placements, y }) {

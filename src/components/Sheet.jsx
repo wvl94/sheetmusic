@@ -126,7 +126,22 @@ function Beam({ group, clef }) {
   )
 }
 
-function Stave({ stave, score, selectedId, playingIds, showNames, onNotePointerDown }) {
+function RepeatSign({ x, y, dir }) {
+  const thick = SPACE * 0.44
+  const thickX = dir > 0 ? x : x - thick
+  const thinX = dir > 0 ? x + thick + SPACE * 0.42 : x - thick - SPACE * 0.42
+  const dotX = dir > 0 ? x + thick + SPACE * 1.1 : x - thick - SPACE * 1.1
+  return (
+    <g className="repeat-sign">
+      <rect className="ink-fill" x={thickX} y={y} width={thick} height={STAFF_H} />
+      <line className="ink-stroke" x1={thinX} x2={thinX} y1={y} y2={y + STAFF_H} strokeWidth={LINE_T * 1.2} />
+      <circle className="ink-fill" cx={dotX} cy={y + SPACE * 1.5} r={SPACE * 0.23} />
+      <circle className="ink-fill" cx={dotX} cy={y + SPACE * 2.5} r={SPACE * 0.23} />
+    </g>
+  )
+}
+
+function Stave({ stave, score, selectedId, playingIds, showNames, onBarline, onNotePointerDown }) {
   const { y, x, w, clef, measures, showTime } = stave
   const lines = [0, 1, 2, 3, 4].map((i) => y + i * SPACE)
   const topDn = CLEFS[clef].topDn
@@ -136,6 +151,8 @@ function Stave({ stave, score, selectedId, playingIds, showNames, onNotePointerD
   const keyGlyph = score.fifths >= 0 ? ACCIDENTAL_GLYPHS.sharp : ACCIDENTAL_GLYPHS.flat
   const beamed = new Set(stave.beams.flat())
   const byId = new Map(measures.flatMap((m) => m.notes).map((p) => [p.id, p]))
+  const starts = new Set(score.repeats?.starts || [])
+  const ends = new Set(score.repeats?.ends || [])
 
   let cursor = x + 2.2
   const clefX = cursor
@@ -160,17 +177,49 @@ function Stave({ stave, score, selectedId, playingIds, showNames, onNotePointerD
         </>
       ) : null}
 
-      {measures.map((m, i) => (
-        <line
-          key={m.index}
-          className="ink-stroke"
-          x1={m.x + m.w}
-          x2={m.x + m.w}
-          y1={y}
-          y2={y + STAFF_H}
-          strokeWidth={i === measures.length - 1 ? LINE_T * 1.6 : LINE_T * 1.2}
-        />
-      ))}
+      {measures.map((m, i) => {
+        const repeatEnd = ends.has(m.index + 1)
+        const repeatStart = starts.has(m.index)
+        return (
+          <g key={m.index}>
+            {repeatStart ? <RepeatSign x={m.x} y={y} dir={1} /> : null}
+            {repeatEnd ? (
+              <RepeatSign x={m.x + m.w} y={y} dir={-1} />
+            ) : (
+              <line
+                className="ink-stroke"
+                x1={m.x + m.w}
+                x2={m.x + m.w}
+                y1={y}
+                y2={y + STAFF_H}
+                strokeWidth={i === measures.length - 1 ? LINE_T * 1.6 : LINE_T * 1.2}
+              />
+            )}
+            <rect
+              className="barline-hit"
+              x={m.x + m.w - 1.6}
+              y={y - 1}
+              width={3.2}
+              height={STAFF_H + 2}
+              onPointerDown={(e) => { e.stopPropagation(); onBarline(m.index + 1) }}
+            >
+              <title>Click to repeat this section</title>
+            </rect>
+            {m.index === 0 ? (
+              <rect
+                className="barline-hit"
+                x={m.x - 1.6}
+                y={y - 1}
+                width={3.2}
+                height={STAFF_H + 2}
+                onPointerDown={(e) => { e.stopPropagation(); onBarline(0) }}
+              >
+                <title>Click to start a repeated section here</title>
+              </rect>
+            ) : null}
+          </g>
+        )
+      })}
 
       {stave.beams.map((ids, i) => (
         <Beam key={i} group={ids.map((id) => byId.get(id)).filter(Boolean)} clef={clef} />
@@ -196,7 +245,7 @@ function Stave({ stave, score, selectedId, playingIds, showNames, onNotePointerD
   )
 }
 
-export default function Sheet({ score, layout, zoom, selectedId, playingIds, ghost, showNames, onPointer, onNotePointerDown, pageRefs }) {
+export default function Sheet({ score, layout, zoom, selectedId, playingIds, ghost, showNames, onBarline, onPointer, onNotePointerDown, pageRefs }) {
   const refs = useRef([])
   return (
     <div className="sheet">
@@ -247,6 +296,7 @@ export default function Sheet({ score, layout, zoom, selectedId, playingIds, gho
                     selectedId={selectedId}
                     playingIds={playingIds}
                     showNames={showNames}
+                    onBarline={onBarline}
                     onNotePointerDown={onNotePointerDown}
                   />
                 </g>

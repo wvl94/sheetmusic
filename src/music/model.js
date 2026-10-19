@@ -120,6 +120,54 @@ export const measureCapacity = (time) => (time.beats * 4) / time.value
 /** Length of one beam group, measured in quarter notes. */
 export const beamUnit = (time) => (time.value === 8 && time.beats % 3 === 0 ? 1.5 : 4 / time.value)
 
+/** Split a part's notes into bars of `cap` quarter notes. */
+export function splitIntoMeasures(notes, cap) {
+  const measures = [{ notes: [] }]
+  let used = 0
+  notes.forEach((note, index) => {
+    const beats = beatsOf(note)
+    if (used > 1e-9 && used + beats > cap + 1e-9) {
+      measures.push({ notes: [] })
+      used = 0
+    }
+    measures[measures.length - 1].notes.push({ note, index, startBeat: used, beats })
+    used += beats
+    if (used >= cap - 1e-9) {
+      measures.push({ notes: [] })
+      used = 0
+    }
+  })
+  if (measures.length > 1 && measures[measures.length - 1].notes.length === 0) measures.pop()
+  return measures
+}
+
+/** Repeat marks live on barlines: barline b sits before bar b. */
+export const emptyRepeats = () => ({ starts: [], ends: [] })
+
+/** The order the bars are actually played in, once repeats are followed. */
+export function repeatPlan(repeats, measureCount) {
+  const starts = new Set(repeats?.starts || [])
+  const ends = new Set(repeats?.ends || [])
+  const plan = []
+  const taken = new Set()
+  let lastStart = 0
+  let m = 0
+  let guard = 0
+  while (m < measureCount && guard < 4000) {
+    guard += 1
+    if (starts.has(m)) lastStart = m
+    plan.push(m)
+    const barline = m + 1
+    if (ends.has(barline) && !taken.has(barline)) {
+      taken.add(barline)
+      m = lastStart
+    } else {
+      m += 1
+    }
+  }
+  return plan
+}
+
 let idCounter = 0
 export const uid = (prefix = 'n') => `${prefix}${Date.now().toString(36)}${(idCounter++).toString(36)}`
 
@@ -139,6 +187,7 @@ export function newScore() {
     tempo: 96,
     time: { beats: 4, value: 4 },
     fifths: 0,
+    repeats: emptyRepeats(),
     parts: [makePart('Piano', 'treble', 'piano'), makePart('Cello', 'bass', 'cello')],
   }
 }
